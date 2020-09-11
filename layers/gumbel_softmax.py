@@ -3,6 +3,25 @@ import tensorflow as tf
 from tensorflow import keras as K
 
 
+class GumbelSoftmaxLayer(K.layers.Layer):
+    def __init__(self, N, M, min_temp, max_temp, full_epoch, beta=1.):
+        super(GumbelSoftmaxLayer, self).__init__()
+        self.reshape = K.layers.Reshape((N, M))
+        self.beta = beta
+        self.gumbel_activation = GumbelSoftmax(
+            N, M, min_temp, max_temp, full_epoch, beta=beta)
+
+    def call(self, inputs):
+        x = self.reshape(inputs)
+        a = K.activations.softmax(x)
+
+        log_a = tf.math.log(a + 1e-20)
+        loss = tf.math.reduce_mean(a * log_a) * self.beta
+        self.add_loss(K.backend.in_train_phase(loss, 0.0))
+
+        return self.gumbel_activation(x)
+
+
 def anneal_rate(epoch, minv=0.1, maxv=5.0):
     import math
     return math.log(maxv/minv) / epoch
@@ -12,7 +31,7 @@ class ScheduledVariable:
     """General variable which is changed during the course of training according to some schedule"""
 
     def __init__(self, name="variable",):
-        self.variable = tf.Variable(self.value(0), name=name)
+        self.variable = tf.Variable(self.value(0), name=name, dtype=tf.float32)
 
     def value(self, epoch):
         """Should return a scalar value based on the current epoch.
@@ -44,69 +63,44 @@ class GumbelSoftmax(ScheduledVariable):
         self.beta = beta
         super(GumbelSoftmax, self).__init__("temperature")
 
-    def call(self, logits):
+    def get_gumbel_logits(self, logits):
         u = tf.random.uniform(tf.shape(logits), 0, 1)
-        gumbel = tf.math.subtract(
-            0, tf.math.log(
-                tf.math.subtract(1e-20, tf.math.log(u + 1e-20))
-            )
-        )
+        gumbel = tf.negative(tf.math.log(
+            tf.math.subtract(1e-20, tf.math.log(u + 1e-20))
+        ))
 
-        if self.train_gumbel:
-            train_logit = logits + gumbel
+        if self.train_gumbel or self.test_gumbel:
+            return logits + gumbel
         else:
-            train_logit = logits
+            return logits
 
-        if self.test_gumbel:
-            test_logit = logits + gumbel
+    def one_hot(self, logits):
+        return tf.one_hot(tf.math.argmax(logits, axis=2),
+                          self.M, on_value=1, off_value=0,
+                          dtype=tf.float32)
+
+    def train_activation(self, logits):
+        softmax = K.activations.softmax(logits / self.variable)
+        if self.train_softmax:
+            return softmax
         else:
-            test_logit = logits
-
-        def softmax_train(x):
-            return K.activations.softmax(x / self.variable)
-
-        def argmax_train(x):
             # use straight-through estimator
-            argmax = tf.one_hot(tf.math.argmax(x),
-                                self.M, on_value=1, off_value=0)
-            softmax = K.activations.softmax(x / self.variable)
+            argmax = self.one_hot(logits)
             return tf.stop_gradient(argmax-softmax) + softmax
 
-        def softmax_test(x):
-            return K.activations.softmax(x / self.min)
-
-        def argmax_test(x):
-            return tf.one_hot(tf.math.argmax(x),
-                              self.M, on_value=1, off_value=0)
-
-        if self.train_softmax:
-            train_activation = softmax_train
-        else:
-            train_activation = argmax_train
-
+    def test_activation(self, logits):
         if self.test_softmax:
-            test_activation = softmax_test
+            return K.activations.softmax(logits / self.min)
         else:
-            test_activation = argmax_test
+            one_hot = self.one_hot(logits)
+            return one_hot
 
+    def __call__(self, logits):
+        logits = self.get_gumbel_logits(logits)
         return K.backend.in_train_phase(
-            train_activation(train_logit),
-            test_activation(test_logit))
-
-    def __call__(self, previous_layer):
-        GumbelSoftmax.count += 1
-        c = GumbelSoftmax.count-1
-
-        layer = K.layers.Lambda(self.call, name="gumbel_{}".format(c))
-
-        logits = K.layers.Reshape((self.N, self.M))(previous_layer)
-        q = K.activations.softmax(logits)
-        log_q = tf.math.log(q + 1e-20)
-        loss = tf.math.reduce_mean(q * log_q) * self.beta
-
-        layer.add_loss(K.backend.in_train_phase(loss, 0.0), logits)
-
-        return layer(logits)
+            self.train_activation(logits),
+            self.test_activation(logits)
+        )
 
     def value(self, epoch):
         return np.max([
