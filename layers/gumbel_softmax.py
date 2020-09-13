@@ -13,13 +13,18 @@ class GumbelSoftmaxLayer(K.layers.Layer):
 
     def call(self, inputs):
         x = self.reshape(inputs)
-        a = K.activations.softmax(x)
 
-        log_a = tf.math.log(a + 1e-20)
-        loss = tf.math.reduce_mean(a * log_a) * self.beta
-        self.add_loss(K.backend.in_train_phase(loss, 0.0))
+        # a = K.activations.softmax(x)
+        # log_a = tf.math.log(a + 1e-20)
+        # loss = tf.math.reduce_mean(a * log_a) * self.beta
+        # self.add_loss(K.backend.in_train_phase(loss, 0.0))
 
         return self.gumbel_activation(x)
+
+    def get_update_callback(self):
+        return K.callbacks.LambdaCallback(
+            on_epoch_end=self.gumbel_activation.update
+        )
 
 
 def anneal_rate(epoch, minv=0.1, maxv=5.0):
@@ -43,10 +48,8 @@ Each subclasses should implement a method for it."""
 
 
 class GumbelSoftmax(ScheduledVariable):
-    count = 0
-
     def __init__(self, N, M, min_temp, max_temp, full_epoch, annealer=anneal_rate,
-                 beta=1., offset=0, train_gumbel=True, train_softmax=True,
+                 beta=1., offset=0, train_gumbel=True, train_softmax=False,
                  test_gumbel=False, test_softmax=False,
                  ):
         self.N = N
@@ -67,14 +70,18 @@ class GumbelSoftmax(ScheduledVariable):
         u = tf.random.uniform(tf.shape(logits), 0, 1)
         gumbel = tf.negative(tf.math.log(
             tf.math.subtract(1e-20, tf.math.log(u + 1e-20))
-        ))
+        ), name='gumbel')
 
-        if self.train_gumbel or self.test_gumbel:
-            return logits + gumbel
+        if K.backend.in_train_phase(self.train_gumbel, self.test_gumbel):
+            return tf.add(logits, gumbel)
         else:
             return logits
 
     def one_hot(self, logits):
+        # print('Logits', logits)
+        # print()
+        # print('Argmax', tf.math.argmax(logits, axis=2))
+        # print()
         return tf.one_hot(tf.math.argmax(logits, axis=2),
                           self.M, on_value=1, off_value=0,
                           dtype=tf.float32)
@@ -86,13 +93,17 @@ class GumbelSoftmax(ScheduledVariable):
         else:
             # use straight-through estimator
             argmax = self.one_hot(logits)
-            return tf.stop_gradient(argmax-softmax) + softmax
+            stop_gradient = tf.stop_gradient(tf.subtract(argmax, softmax))
+            # softmax is only used in back propagation
+            return tf.add(stop_gradient, softmax)
 
     def test_activation(self, logits):
         if self.test_softmax:
             return K.activations.softmax(logits / self.min)
         else:
             one_hot = self.one_hot(logits)
+            # print(one_hot)
+            # print()
             return one_hot
 
     def __call__(self, logits):
