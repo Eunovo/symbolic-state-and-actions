@@ -83,9 +83,11 @@ class GumbelSoftmax(ScheduledVariable):
         # print()
         # print('Argmax', tf.math.argmax(logits, axis=2))
         # print()
-        return tf.one_hot(tf.math.argmax(logits, axis=2),
-                          self.M, on_value=1, off_value=0,
-                          dtype=tf.float32)
+        return tf.one_hot(
+            tf.math.argmax(logits, axis=2),
+            self.M, on_value=1, off_value=0,
+            dtype=tf.float32
+        )
 
     def train_activation(self, logits):
         softmax = K.activations.softmax(logits / self.variable)
