@@ -39,7 +39,7 @@ class StateAutoEncoder:
         ])
 
     def use_checkpoints(self, checkpoint_dir):
-        self.state_autoencoder.save_weights(checkpoint_dir)
+        self.state_autoencoder.save_weights(checkpoint_dir, overwrite=False)
         load_status = self.state_autoencoder.load_weights(checkpoint_dir)
         # assert that all model variables have been restored
         load_status.assert_consumed()
