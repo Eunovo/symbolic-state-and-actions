@@ -14,6 +14,7 @@ class GumbelSoftmaxLayer(K.layers.Layer):
     def call(self, inputs):
         x = self.reshape(inputs)
 
+        # I don't understand the purpose of this loss
         # a = K.activations.softmax(x)
         # log_a = tf.math.log(a + 1e-20)
         # loss = tf.math.reduce_mean(a * log_a) * self.beta

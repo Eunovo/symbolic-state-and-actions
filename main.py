@@ -2,8 +2,7 @@ import tensorflow as tf
 import gym
 import os
 
-from layers.gumbel_softmax import GumbelSoftmaxLayer
-
+from model import StateAutoEncoder
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 checkpoint_path = dir_path+"/checkpoints/"
@@ -12,12 +11,6 @@ save_checkpoints = False
 n_epochs = 10
 steps_per_epoch = 10000
 batch_size = 64
-
-
-tf.debugging.experimental.enable_dump_debug_info(
-    dump_root=tf_logdir,
-    tensor_debug_mode="FULL_HEALTH",
-    circular_buffer_size=-1)
 
 
 def get_states(environment, number_of_episodes):
@@ -42,68 +35,51 @@ def normalize_data(x):
     return ([x], [x])
 
 
-dataset = tf.data.Dataset.from_generator(
-    lambda: get_states('Taxi-v3', 100), output_types=tf.int32, output_shapes=(1,))
+def parse_args(save_checkpoints, checkpoint_path):
+    import argparse
 
-dataset = dataset.map(normalize_data)
+    parser = argparse.ArgumentParser(
+        description='Train the sate auto encoder.')
+    parser.add_argument(
+        '-save-checkpoints',
+        help='Save model training checkpoints',
+        default=save_checkpoints
+    )
+    parser.add_argument(
+        '-board',
+        help='Use tensorboard',
+        default=False
+    )
+    parser.add_argument(
+        '--checkpointdir',
+        help='Save dir for model checkpoints',
+        default=checkpoint_path
+    )
+
+    return parser.parse_args()
 
 
-# for count_batch in dataset.repeat().batch(10).take(10):
-#     print(count_batch[0].numpy(), ',', count_batch[1].numpy())
+if __name__ == "__main__":
+    args = parse_args(save_checkpoints, checkpoint_path)
 
-gumbel_layer = GumbelSoftmaxLayer(10, 2, 5.0, 0.7, n_epochs)
+    callbacks = []
+    if (args.board):
+        tensorboard_callback = tf.keras.callbacks.TensorBoard(
+            log_dir=tf_logdir)
+        callbacks.append(tensorboard_callback)
 
-encoder = tf.keras.Sequential([
-    tf.keras.Input(shape=(1,), batch_size=batch_size),
-    tf.keras.layers.Dense(40, activation=tf.nn.relu),
-    tf.keras.layers.BatchNormalization(),
-    tf.keras.layers.Dropout(0.4),
-    tf.keras.layers.Dense(20),
-    gumbel_layer,
-    tf.keras.layers.Flatten()
-])
-# encoder.summary()
+    dataset = tf.data.Dataset.from_generator(
+        lambda: get_states('Taxi-v3', 100), output_types=tf.int32, output_shapes=(1,))
+    dataset = dataset.map(normalize_data)
 
-decoder = tf.keras.Sequential([
-    tf.keras.Input(shape=(20,), batch_size=batch_size),
-    tf.keras.layers.Dense(100, activation=tf.nn.relu),
-    tf.keras.layers.BatchNormalization(),
-    tf.keras.layers.Dropout(0.4),
-    tf.keras.layers.Dense(50, activation=tf.nn.relu),
-    tf.keras.layers.BatchNormalization(),
-    tf.keras.layers.Dropout(0.4),
-    tf.keras.layers.Dense(1, activation=tf.nn.sigmoid)
-])
-# decoder.summary()
+    state_autoencoder = StateAutoEncoder(n_epochs, steps_per_epoch, batch_size)
 
-state_autoencoder = tf.keras.Sequential([
-    tf.keras.Input(shape=(1,), batch_size=batch_size),
-    encoder,
-    decoder,
-])
+    if (args.save_checkpoints):
+        state_autoencoder.use_checkpoints(args.checkpointdir)
 
-if (save_checkpoints):
-    state_autoencoder.save_weights(checkpoint_path)
-    load_status = state_autoencoder.load_weights(checkpoint_path)
-    load_status.assert_consumed()  # assert that all model variables have been restored
+    state_autoencoder.compile()
 
-# for data, label in dataset.take(1):
-#     print("Input: ", data)
-#     print("Encoding: ", encoder(data).numpy())
-#     print("Decoding: ", state_autoencoder(data).numpy())
-
-state_autoencoder.compile(
-    optimizer='adam',
-    loss='mean_squared_error',
-    metrics=['accuracy']
-)
-
-train_dataset = dataset.shuffle(buffer_size=1024).repeat().batch(
-    batch_size, drop_remainder=True)
-
-tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=tf_logdir)
-
-history = state_autoencoder.fit(
-    train_dataset, epochs=n_epochs,
-    steps_per_epoch=steps_per_epoch,
-    callbacks=[tensorboard_callback, gumbel_layer.get_update_callback()])
+    train_dataset = dataset.shuffle(buffer_size=1024).repeat().batch(
+        batch_size, drop_remainder=True)
+    history = state_autoencoder.fit(train_dataset, callbacks)
+    
