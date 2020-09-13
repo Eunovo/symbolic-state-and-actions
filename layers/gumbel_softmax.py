@@ -4,12 +4,17 @@ from tensorflow import keras as K
 
 
 class GumbelSoftmaxLayer(K.layers.Layer):
-    def __init__(self, N, M, min_temp, max_temp, full_epoch, beta=1.):
+    def __init__(self, N, M, min_temp, max_temp, n_epochs, beta=1.):
         super(GumbelSoftmaxLayer, self).__init__()
+        self.N = N
+        self.M = M
+        self.min_temp = min_temp
+        self.max_temp = max_temp
+        self.n_epochs = n_epochs
         self.reshape = K.layers.Reshape((N, M))
         self.beta = beta
         self.gumbel_activation = GumbelSoftmax(
-            N, M, min_temp, max_temp, full_epoch, beta=beta)
+            N, M, min_temp, max_temp, n_epochs, beta=beta)
 
     def call(self, inputs):
         x = self.reshape(inputs)
@@ -26,6 +31,22 @@ class GumbelSoftmaxLayer(K.layers.Layer):
         return K.callbacks.LambdaCallback(
             on_epoch_end=self.gumbel_activation.update
         )
+
+    def get_config(self):
+        config = super.get_config()
+        child_config = {
+            'N': self.N,
+            'M': self.M,
+            'min_temp': self.min_temp,
+            'max_temp': self.max_temp,
+            'n_epochs': self.n_epochs,
+            'beta': self.beta
+        }
+
+        for k in child_config.keys():
+            config[k] = child_config[k]
+
+        return config
 
 
 def anneal_rate(epoch, minv=0.1, maxv=5.0):

@@ -6,9 +6,10 @@ from model import StateAutoEncoder
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 checkpoint_path = dir_path+"/checkpoints/"
-tf_logdir = dir_path+"/tmp/tf_logdir"
-save_checkpoints = False
-n_epochs = 10
+tf_logdir = dir_path+"/tmp/tf_logdir/"
+model_save_dir = dir_path+"/saved/"
+save_checkpoints = True
+n_epochs = 100
 steps_per_epoch = 10000
 batch_size = 64
 
@@ -35,7 +36,7 @@ def normalize_data(x):
     return ([x], [x])
 
 
-def parse_args(save_checkpoints, checkpoint_path):
+def parse_args(save_checkpoints, checkpoint_path, model_save_dir):
     import argparse
 
     parser = argparse.ArgumentParser(
@@ -51,6 +52,11 @@ def parse_args(save_checkpoints, checkpoint_path):
         default=False
     )
     parser.add_argument(
+        '--savedir',
+        help='Model save path',
+        default=model_save_dir
+    )
+    parser.add_argument(
         '--checkpointdir',
         help='Save dir for model checkpoints',
         default=checkpoint_path
@@ -60,7 +66,7 @@ def parse_args(save_checkpoints, checkpoint_path):
 
 
 if __name__ == "__main__":
-    args = parse_args(save_checkpoints, checkpoint_path)
+    args = parse_args(save_checkpoints, checkpoint_path, model_save_dir)
 
     callbacks = []
     if (args.board):
@@ -82,4 +88,5 @@ if __name__ == "__main__":
     train_dataset = dataset.shuffle(buffer_size=1024).repeat().batch(
         batch_size, drop_remainder=True)
     history = state_autoencoder.fit(train_dataset, callbacks)
+    state_autoencoder.save(args.savedir)
     

@@ -38,7 +38,7 @@ class StateAutoEncoder:
             self.decoder,
         ])
 
-    def use_checkpoint(self, checkpoint_dir):
+    def use_checkpoints(self, checkpoint_dir):
         self.state_autoencoder.save_weights(checkpoint_dir)
         load_status = self.state_autoencoder.load_weights(checkpoint_dir)
         # assert that all model variables have been restored
@@ -59,3 +59,6 @@ class StateAutoEncoder:
             steps_per_epoch=self.steps_per_epoch,
             callbacks=callbacks
         )
+
+    def save(self, save_dir):
+        self.state_autoencoder.save(save_dir)
