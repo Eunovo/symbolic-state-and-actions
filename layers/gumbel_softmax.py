@@ -97,7 +97,7 @@ class GumbelSoftmax(ScheduledVariable):
             # use straight-through estimator
             argmax = self.one_hot(logits)
             stop_gradient = tf.stop_gradient(tf.subtract(argmax, softmax))
-            # softmax is only used in back propagation
+            # cancel out the softmax because it is only used in back propagation
             return tf.add(stop_gradient, softmax)
 
     def test_activation(self, logits):
