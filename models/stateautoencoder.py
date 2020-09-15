@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from layers.gumbel_softmax import GumbelSoftmaxLayer
+from layers import GumbelSoftmaxLayer
 
 
 class StateAutoEncoder:

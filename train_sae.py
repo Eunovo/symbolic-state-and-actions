@@ -2,7 +2,7 @@ import tensorflow as tf
 import gym
 import os
 
-from models.stateautoencoder import StateAutoEncoder
+from models import StateAutoEncoder
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 checkpoint_path = dir_path+"/checkpoints/sae/"

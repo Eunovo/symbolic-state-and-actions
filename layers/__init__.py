@@ -1,1 +1,1 @@
-__all__ = ["gumbel_softmax"]
+from layers.gumbel_softmax import GumbelSoftmaxLayer
