@@ -1,4 +1,6 @@
 {
     "python.condaPath": "C:\\Users\\eunov\\miniconda3\\_conda.exe",
-    "python.pythonPath": "C:\\Users\\eunov\\miniconda3\\envs\\ml_env\\python.exe"
+    "python.pythonPath": "C:\\Users\\eunov\\miniconda3\\envs\\ml_env\\python.exe",
+    "python.dataScience.jupyterServerURI": "local",
+    "compile-hero.disable-compile-files-on-did-save-code": false
 }
