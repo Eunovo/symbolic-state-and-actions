@@ -17,12 +17,11 @@ from tf_agents.utils import common
 from models import OptionHierachy
 
 env_name = "Taxi-v3"  # @param {type:"string"}
-fc_layer_params = (100,)
 num_iterations = 20000  # @param {type:"integer"}
 initial_collect_steps = 1000  # @param {type:"integer"}
-collect_steps_per_iteration = 2  # @param {type:"integer"}
+collect_steps_per_iteration = 1  # @param {type:"integer"}
 
-batch_size = 5  # @param {type:"integer"}
+batch_size = 64  # @param {type:"integer"}
 learning_rate = 1e-3  # @param {type:"number"}
 log_interval = 200  # @param {type:"integer"}
 
@@ -38,7 +37,7 @@ train_env = tf_py_environment.TFPyEnvironment(train_py_env)
 eval_env = tf_py_environment.TFPyEnvironment(eval_py_env)
 
 time_step_spec = TimeStep(
-    step_type=TensorSpec(shape=()),
+    step_type=TensorSpec(shape=(), dtype=tf.int32),
     reward=TensorSpec(shape=()),
     discount=TensorSpec(shape=()),
     observation=TensorSpec(shape=(1,), dtype=tf.float32)
@@ -73,7 +72,7 @@ def compute_avg_reward(environment, policy, num_episodes=10):
 
 def collect_step(environment, policy, buffer):
     time_step = environment.current_time_step()
-    action_step = policy.action(time_step)
+    action_step = policy.action(time_step, collect=True)
     next_time_step = environment.step(action_step.action)
 
     traj = trajectory.from_transition(
@@ -119,6 +118,9 @@ iterator = iter(dataset)
 avg_reward = compute_avg_reward(
     eval_env, options_agent, num_eval_episodes)
 avg_reward_history = [avg_reward]
+
+for _ in range(initial_collect_steps):
+    collect_step(train_env, options_agent, replay_buffer)
 
 for _ in range(num_iterations):
 

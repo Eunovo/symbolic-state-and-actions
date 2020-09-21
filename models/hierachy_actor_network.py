@@ -112,8 +112,8 @@ class HierachyActorNetwork(network.DistributionNetwork):
             ) for option in self.options
         ]
         options = tf.stack(options)
-        options = tf.reshape(
-            options, (options.shape[:1][0], options.shape[2:][0]))
+        options = tf.transpose(
+            options, perm=[1, 0, 2])
 
         # select an option using the selection_vector from the master network
         state = tf.matmul(selection_vector, options)
