@@ -2,15 +2,30 @@ import tensorflow as tf
 import os
 
 from layers import GumbelSoftmaxLayer
+from utils import Normalizer
 
 
 class StateAutoEncoder:
-    def __init__(self, n_epochs, steps_per_epoch):
+    def __init__(
+        self,
+        n_epochs,
+        steps_per_epoch,
+        n_encode_bits,
+        normalize=False,
+        normalizer=Normalizer,
+        min_value=None,
+        max_value=None
+    ):
         self.n_epochs = n_epochs
         self.steps_per_epoch = steps_per_epoch
+        self.n_encode_bits = n_encode_bits
+        self.normalize = normalize
+        self.normalizer = Normalizer(min_value, max_value)
+
         self.callbacks = []
 
-        gumbel_layer = GumbelSoftmaxLayer(10, 2, 5.0, 0.7, n_epochs)
+        gumbel_layer = GumbelSoftmaxLayer(
+            self.n_encode_bits, 2, 5.0, 0.7, n_epochs)
         self.callbacks.append(gumbel_layer.get_update_callback())
 
         self.encoder = tf.keras.Sequential([
@@ -62,6 +77,13 @@ class StateAutoEncoder:
     def fit(self, dataset, callbacks=[]):
         self.callbacks.extend(callbacks)
 
+        if (self.normalize):
+            def normalize(x):
+                normalized_x = self.normalizer.normalize(x)
+                return ([normalized_x], [normalized_x])
+
+            dataset = dataset.map(normalize)
+
         return self.state_autoencoder.fit(
             dataset, epochs=self.n_epochs,
             steps_per_epoch=self.steps_per_epoch,
@@ -69,10 +91,17 @@ class StateAutoEncoder:
         )
 
     def encode(self, data):
+        if (self.normalize):
+            data = self.normalizer.normalize(data)
         return self.encoder.predict(data)
 
     def decode(self, data):
-        return self.decoder.predict(data)
+        result = self.decoder.predict(data)
+
+        if (self.normalize):
+            result = self.normalizer.denormalize(data)
+
+        return result
 
     def save(self, save_dir):
         self.state_autoencoder.save(save_dir)
