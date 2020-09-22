@@ -36,6 +36,14 @@ def normalize_data(x):
     return ([x], [x])
 
 
+def generate_dataset(environment, number_of_episodes):
+    dataset = tf.data.Dataset.from_generator(
+        lambda: get_states('Taxi-v3', number_of_episodes),
+        output_types=tf.int32, output_shapes=(1,)
+    )
+    return dataset.map(normalize_data)
+
+
 def parse_args(save_checkpoints, checkpoint_path, model_save_dir):
     import argparse
 
@@ -74,11 +82,9 @@ if __name__ == "__main__":
             log_dir=tf_logdir)
         callbacks.append(tensorboard_callback)
 
-    dataset = tf.data.Dataset.from_generator(
-        lambda: get_states('Taxi-v3', 100), output_types=tf.int32, output_shapes=(1,))
-    dataset = dataset.map(normalize_data)
+    dataset = generate_dataset('Taxi-v3', 100)
 
-    state_autoencoder = StateAutoEncoder(n_epochs, steps_per_epoch, batch_size)
+    state_autoencoder = StateAutoEncoder(n_epochs, steps_per_epoch)
 
     if (args.save_checkpoints):
         state_autoencoder.use_checkpoints(args.checkpointdir)
