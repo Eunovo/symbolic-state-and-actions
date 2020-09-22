@@ -36,8 +36,9 @@ class StateAutoEncoder:
             tf.keras.layers.Dropout(0.4),
             tf.keras.layers.Dense(20),
             gumbel_layer,
-            tf.keras.layers.Lambda(lambda x: x[:, :, 0])
-        ])
+            tf.keras.layers.Lambda(lambda x: x[:, :, 0]),
+        ], name='Encoder')
+        # self.encoder.summary()
 
         self.decoder = tf.keras.Sequential([
             tf.keras.Input(shape=(n_encode_bits,)),
@@ -48,7 +49,8 @@ class StateAutoEncoder:
             tf.keras.layers.BatchNormalization(),
             tf.keras.layers.Dropout(0.4),
             tf.keras.layers.Dense(1, activation=tf.nn.sigmoid)
-        ])
+        ], name='Decoder')
+        # self.decoder.summary()
 
         self.state_autoencoder = tf.keras.Sequential([
             tf.keras.Input(shape=(1,)),
@@ -93,7 +95,7 @@ class StateAutoEncoder:
         result = self.decoder.predict(data)
 
         if (self.normalize):
-            result = self.normalizer.denormalize(data)
+            result = self.normalizer.denormalize(result)
 
         return result
 

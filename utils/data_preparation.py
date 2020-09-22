@@ -13,6 +13,7 @@ class Normalizer:
         )
 
     def denormalize(self, x):
+        x = tf.Variable(x)
         return tf.add(
             tf.multiply((self.xmax - self.xmin), x),
             self.xmin
