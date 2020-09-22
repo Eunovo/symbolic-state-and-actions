@@ -22,6 +22,10 @@ class StateAutoEncoder:
         self.normalize = normalize
         self.normalizer = Normalizer(min_value, max_value)
 
+        if (self.normalize and not min_value and not max_value):
+            raise ValueError(
+                "min_value and max_value are required for normalization")
+
         self.callbacks = []
 
         gumbel_layer = GumbelSoftmaxLayer(
