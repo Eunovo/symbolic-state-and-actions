@@ -3,6 +3,7 @@ import gym
 import os
 
 from models import StateAutoEncoder
+from utils import Normalizer
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 checkpoint_path = dir_path+"/checkpoints/sae/"
@@ -27,11 +28,17 @@ def get_states(environment, number_of_episodes):
         n += 1
 
 
-def generate_dataset(environment, number_of_episodes):
-    return tf.data.Dataset.from_generator(
+def generate_dataset(environment, number_of_episodes, normalizer):
+    dataset = tf.data.Dataset.from_generator(
         lambda: get_states('Taxi-v3', number_of_episodes),
         output_types=tf.int32, output_shapes=(1,)
     )
+
+    def normalize(x):
+        x = normalizer.normalize(x)
+        return ([x], [x])
+
+    return dataset.map(normalize)
 
 
 def parse_args(save_checkpoints, checkpoint_path, model_save_dir):
@@ -72,12 +79,14 @@ if __name__ == "__main__":
             log_dir=tf_logdir)
         callbacks.append(tensorboard_callback)
 
-    dataset = generate_dataset('Taxi-v3', 100)
+    normalizer = Normalizer(0, 500)
+
+    dataset = generate_dataset('Taxi-v3', 100, normalizer)
 
     state_autoencoder = StateAutoEncoder(
         n_epochs, steps_per_epoch,
         10, normalize=True,
-        min_value=0, max_value=500
+        normalizer=normalizer
     )
 
     if (args.save_checkpoints):

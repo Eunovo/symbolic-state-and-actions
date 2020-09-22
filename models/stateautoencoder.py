@@ -2,7 +2,6 @@ import tensorflow as tf
 import os
 
 from layers import GumbelSoftmaxLayer
-from utils import Normalizer
 
 
 class StateAutoEncoder:
@@ -12,19 +11,17 @@ class StateAutoEncoder:
         steps_per_epoch,
         n_encode_bits,
         normalize=False,
-        normalizer=Normalizer,
-        min_value=None,
-        max_value=None
+        normalizer=None
     ):
         self.n_epochs = n_epochs
         self.steps_per_epoch = steps_per_epoch
         self.n_encode_bits = n_encode_bits
         self.normalize = normalize
-        self.normalizer = Normalizer(min_value, max_value)
+        self.normalizer = normalizer
 
-        if (self.normalize and not min_value and not max_value):
+        if (self.normalize and not normalizer):
             raise ValueError(
-                "min_value and max_value are required for normalization")
+                "a normalizer is required for normalization")
 
         self.callbacks = []
 
@@ -39,11 +36,11 @@ class StateAutoEncoder:
             tf.keras.layers.Dropout(0.4),
             tf.keras.layers.Dense(20),
             gumbel_layer,
-            tf.keras.layers.Flatten()
+            tf.keras.layers.Lambda(lambda x: x[:, :, 0])
         ])
 
         self.decoder = tf.keras.Sequential([
-            tf.keras.Input(shape=(20,)),
+            tf.keras.Input(shape=(n_encode_bits,)),
             tf.keras.layers.Dense(40, activation=tf.nn.relu),
             tf.keras.layers.BatchNormalization(),
             tf.keras.layers.Dropout(0.4),
@@ -80,13 +77,6 @@ class StateAutoEncoder:
 
     def fit(self, dataset, callbacks=[]):
         self.callbacks.extend(callbacks)
-
-        if (self.normalize):
-            def normalize(x):
-                normalized_x = self.normalizer.normalize(x)
-                return ([normalized_x], [normalized_x])
-
-            dataset = dataset.map(normalize)
 
         return self.state_autoencoder.fit(
             dataset, epochs=self.n_epochs,
