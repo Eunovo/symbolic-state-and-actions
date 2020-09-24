@@ -13,8 +13,9 @@ from tf_agents.trajectories.time_step import TimeStep
 from tf_agents.specs import BoundedTensorSpec, TensorSpec
 from tf_agents.utils import common
 
-
 from models import OptionHierachy
+from models import StateAutoEncoder
+from environments import StateEncoder
 
 env_name = "Taxi-v3"  # @param {type:"string"}
 num_iterations = 20000  # @param {type:"integer"}
@@ -44,16 +45,36 @@ time_step_spec = TimeStep(
 )
 
 
-def prepare(time_step):
-    return TimeStep(
-        step_type=tf.reshape(time_step.step_type, ()),
-        reward=tf.reshape(time_step.reward, ()),
-        discount=tf.reshape(time_step.discount, ()),
-        observation=tf.cast(time_step.observation, tf.float32)
-    )
+def get_prepare(spec):
+    def prepare(time_step):
+        step_type = tf.reshape(
+            time_step.step_type,
+            spec.step_type.shape
+        )
+        reward = tf.reshape(
+            time_step.reward,
+            spec.reward.shape
+        )
+        discount = tf.reshape(
+            time_step.discount,
+            spec.discount.shape
+        )
+        observation = tf.reshape(
+            observation,
+            spec.observation.shape
+        )
+        return TimeStep(
+            step_type=step_type,
+            reward=reward,
+            discount=discount,
+            observation=tf.cast(observation, spec.observation.dtype)
+        )
+
+    return prepare
 
 
-def compute_avg_reward(environment, policy, num_episodes=10):
+def compute_avg_reward(environment, policy, num_episodes=10, prepare=None):
+    prepare = lambda x: prepare(x) if (prepare) else x
     total_reward = 0.0
     for _ in range(num_episodes):
 
@@ -70,10 +91,12 @@ def compute_avg_reward(environment, policy, num_episodes=10):
     return avg_reward.numpy()[0]
 
 
-def collect_step(environment, policy, buffer):
+def collect_step(environment, policy, buffer, prepare=None):
     time_step = environment.current_time_step()
     action_step = policy.action(time_step, collect=True)
     next_time_step = environment.step(action_step.action)
+
+    prepare = lambda x: prepare(x) if (prepare) else x
 
     traj = trajectory.from_transition(
         prepare(time_step),
@@ -89,59 +112,72 @@ def collect_step(environment, policy, buffer):
     buffer.add_batch(values_batched)
 
 
-def collect_data(env, policy, buffer, steps):
+def collect_data(env, policy, buffer, steps, prepare=None):
     for _ in range(steps):
-        collect_step(env, policy, buffer)
+        collect_step(env, policy, buffer, prepare)
 
 
-options_agent = OptionHierachy(
-    batch_size,
-    train_env.action_spec(),
-    time_step_spec,
-    num_iterations,
-    learning_rate=learning_rate
-)
+if __name__ == "__main__":
+    options_agent = OptionHierachy(
+        batch_size,
+        train_env.action_spec(),
+        time_step_spec,
+        num_iterations,
+        learning_rate=learning_rate
+    )
 
-replay_buffer = options_agent.get_replay_buffer(
-    replay_buffer_max_length
-)
+    replay_buffer = options_agent.get_replay_buffer(
+        replay_buffer_max_length
+    )
 
-dataset = replay_buffer.as_dataset(
-    num_parallel_calls=3,
-    sample_batch_size=batch_size,
-    num_steps=2
-)
-iterator = iter(dataset)
+    dataset = replay_buffer.as_dataset(
+        num_parallel_calls=3,
+        sample_batch_size=batch_size,
+        num_steps=2
+    )
+    iterator = iter(dataset)
 
+    prepare = get_prepare(time_step_spec)
 
-# Evaluate the agent's policy once before training.
-avg_reward = compute_avg_reward(
-    eval_env, options_agent, num_eval_episodes)
-avg_reward_history = [avg_reward]
+    # Evaluate the agent's policy once before training.
+    avg_reward = compute_avg_reward(
+        eval_env, options_agent,
+        num_eval_episodes, prepare=prepare
+    )
+    avg_reward_history = [avg_reward]
 
-for _ in range(initial_collect_steps):
-    collect_step(train_env, options_agent, replay_buffer)
+    collect_data(
+        train_env, options_agent,
+        replay_buffer, initial_collect_steps,
+        prepare=prepare
+    )
 
-for _ in range(num_iterations):
+    for _ in range(num_iterations):
 
-    # Collect a few steps using collect_policy and save to the replay buffer.
-    for _ in range(collect_steps_per_iteration):
-        collect_step(train_env, options_agent, replay_buffer)
+        # Collect a few steps using collect_policy and save to the replay buffer.
+        collect_data(
+            train_env, options_agent,
+            replay_buffer, collect_steps_per_iteration,
+            prepare=prepare
+        )
 
-    # Sample a batch of data from the buffer and update the agent's network.
-    experience, unused_info = next(iterator)
-    train_loss = options_agent.train(experience)
+        # Sample a batch of data from the buffer and update the agent's network.
+        experience, unused_info = next(iterator)
+        train_loss = options_agent.train(experience)
 
-    step = options_agent.get_counter()
+        step = options_agent.get_counter()
 
-    if step % log_interval == 0:
-        print('step = {0}: loss = {1}'.format(step, train_loss))
+        if step % log_interval == 0:
+            print('step = {0}: loss = {1}'.format(step, train_loss))
 
-    if step % eval_interval == 0:
-        avg_reward = compute_avg_reward(
-            eval_env, options_agent, num_eval_episodes)
-        print('step = {0}: Average Reward = {1}'.format(step, avg_reward))
-        avg_reward_history.append(avg_reward)
+        if step % eval_interval == 0:
+            avg_reward = compute_avg_reward(
+                eval_env, options_agent,
+                num_eval_episodes, prepare=prepare
+            )
+            print('step = {0}: Average Reward = {1}'.format(step, avg_reward))
+            avg_reward_history.append(avg_reward)
+
 
 # def main(environment, n_episodes, state_ae):
 #     # Remember to implement two stage training

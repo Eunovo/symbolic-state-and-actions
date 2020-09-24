@@ -31,10 +31,12 @@ class StateAutoEncoder:
 
         self.encoder = tf.keras.Sequential([
             tf.keras.Input(shape=(1,)),
-            tf.keras.layers.Dense(40, activation=tf.nn.relu),
+            tf.keras.layers.Dense(500, activation=tf.nn.relu),
+            tf.keras.layers.Dropout(0.2),
+            tf.keras.layers.Dense(1000, activation=tf.nn.relu),
             tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Dropout(0.4),
-            tf.keras.layers.Dense(20),
+            tf.keras.layers.Dropout(0.2),
+            tf.keras.layers.Dense(n_encode_bits * 2),
             gumbel_layer,
             tf.keras.layers.Lambda(lambda x: x[:, :, 0]),
         ], name='Encoder')
@@ -42,12 +44,11 @@ class StateAutoEncoder:
 
         self.decoder = tf.keras.Sequential([
             tf.keras.Input(shape=(n_encode_bits,)),
-            tf.keras.layers.Dense(40, activation=tf.nn.relu),
+            tf.keras.layers.Dense(1000, activation=tf.nn.relu),
             tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Dropout(0.4),
-            tf.keras.layers.Dense(20, activation=tf.nn.relu),
-            tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Dropout(0.4),
+            tf.keras.layers.Dropout(0.2),
+            tf.keras.layers.Dense(500, activation=tf.nn.relu),
+            tf.keras.layers.Dropout(0.2),
             tf.keras.layers.Dense(1, activation=tf.nn.sigmoid)
         ], name='Decoder')
         # self.decoder.summary()
@@ -73,7 +74,7 @@ class StateAutoEncoder:
     def compile(self):
         self.state_autoencoder.compile(
             optimizer='adam',
-            loss='mean_squared_error',
+            loss='BCE',
             metrics=['accuracy']
         )
 

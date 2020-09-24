@@ -10,9 +10,9 @@ checkpoint_path = dir_path+"/checkpoints/sae/"
 tf_logdir = dir_path+"/tmp/tf_logdir/"
 model_save_dir = dir_path+"/saved/sae"
 save_checkpoints = True
-n_epochs = 100
+n_epochs = 10
 steps_per_epoch = 10000
-batch_size = 64
+batch_size = 128
 
 
 def get_states(environment, number_of_episodes):
@@ -79,13 +79,13 @@ if __name__ == "__main__":
             log_dir=tf_logdir)
         callbacks.append(tensorboard_callback)
 
-    normalizer = Normalizer(0, 500)
+    normalizer = Normalizer(0, 499)
 
     dataset = generate_dataset('Taxi-v3', 100, normalizer)
 
     state_autoencoder = StateAutoEncoder(
         n_epochs, steps_per_epoch,
-        10, normalize=True,
+        20, normalize=True,
         normalizer=normalizer
     )
 
