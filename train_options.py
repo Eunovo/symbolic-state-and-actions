@@ -74,7 +74,7 @@ def get_prepare(spec):
 
 
 def compute_avg_reward(environment, policy, num_episodes=10, prepare=None):
-    prepare = lambda x: prepare(x) if (prepare) else x
+    use_prepare_if_set = lambda x: prepare(x) if (prepare) else x
     total_reward = 0.0
     for _ in range(num_episodes):
 
@@ -82,7 +82,8 @@ def compute_avg_reward(environment, policy, num_episodes=10, prepare=None):
         episode_return = 0.0
 
         while not time_step.is_last():
-            action_step = policy.action(prepare(time_step), collect=True)
+            action_step = policy.action(
+                use_prepare_if_set(time_step), collect=True)
             time_step = environment.step(action_step.action)
             episode_return += time_step.reward
         total_reward += episode_return
@@ -96,12 +97,12 @@ def collect_step(environment, policy, buffer, prepare=None):
     action_step = policy.action(time_step, collect=True)
     next_time_step = environment.step(action_step.action)
 
-    prepare = lambda x: prepare(x) if (prepare) else x
+    use_prepare_if_set = lambda x: prepare(x) if (prepare) else x
 
     traj = trajectory.from_transition(
-        prepare(time_step),
+        use_prepare_if_set(time_step),
         action_step,
-        prepare(next_time_step)
+        use_prepare_if_set(next_time_step)
     )
 
     # Add trajectory to the replay buffer
