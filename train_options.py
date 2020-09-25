@@ -88,7 +88,7 @@ def compute_avg_reward(environment, policy, num_episodes=10, prepare=None):
 
         while not time_step.is_last():
             action_step = policy.action(
-                use_prepare_if_set(time_step), collect=True)
+                use_prepare_if_set(time_step))
             time_step = environment.step(action_step.action)
             episode_return += time_step.reward
         total_reward += episode_return
