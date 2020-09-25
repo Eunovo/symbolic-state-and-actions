@@ -8,7 +8,7 @@ from utils import Normalizer
 dir_path = os.path.dirname(os.path.realpath(__file__))
 checkpoint_path = dir_path+"/checkpoints/sae/"
 tf_logdir = dir_path+"/tmp/tf_logdir/"
-model_save_dir = dir_path+"/saved/sae"
+model_save_dir = dir_path+"/saved/sae/"
 save_checkpoints = True
 n_epochs = 10
 steps_per_epoch = 10000

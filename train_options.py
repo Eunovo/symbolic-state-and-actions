@@ -2,6 +2,7 @@ import tensorflow as tf
 import gym
 from numpy import array
 import numpy as np
+import os
 
 from tf_agents.drivers import dynamic_step_driver
 from tf_agents.environments import suite_gym
@@ -30,6 +31,10 @@ num_eval_episodes = 10  # @param {type:"integer"}
 eval_interval = 1000  # @param {type:"integer"}
 
 replay_buffer_max_length = 100000  # @param {type:"integer"}
+
+dir_path = os.path.dirname(os.path.realpath(__file__))
+checkpoint_dir = dir_path+"/checkpoints/option_hierachy/"
+policy_save_dir = dir_path+"/saved/option_hierachy/"
 
 train_py_env = suite_gym.load(env_name)
 eval_py_env = suite_gym.load(env_name)
@@ -124,12 +129,12 @@ if __name__ == "__main__":
         train_env.action_spec(),
         time_step_spec,
         num_iterations,
-        learning_rate=learning_rate
+        replay_buffer_max_length,
+        learning_rate=learning_rate,
+        checkpoint_dir=checkpoint_dir
     )
 
-    replay_buffer = options_agent.get_replay_buffer(
-        replay_buffer_max_length
-    )
+    replay_buffer = options_agent.get_replay_buffer()
 
     dataset = replay_buffer.as_dataset(
         num_parallel_calls=3,
@@ -169,6 +174,7 @@ if __name__ == "__main__":
         step = options_agent.get_counter()
 
         if step % log_interval == 0:
+            options_agent.save_checkpoint()
             print('step = {0}: loss = {1}'.format(step, train_loss))
 
         if step % eval_interval == 0:
@@ -178,6 +184,8 @@ if __name__ == "__main__":
             )
             print('step = {0}: Average Reward = {1}'.format(step, avg_reward))
             avg_reward_history.append(avg_reward)
+
+    options_agent.save_policy(policy_save_dir)
 
 
 # def main(environment, n_episodes, state_ae):

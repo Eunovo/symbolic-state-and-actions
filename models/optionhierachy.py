@@ -3,8 +3,11 @@ import tensorflow as tf
 from tf_agents.replay_buffers import tf_uniform_replay_buffer
 from tf_agents.networks import value_network
 from tf_agents.agents.ppo import ppo_agent
+from tf_agents.policies import policy_saver
+from tf_agents.utils import common
 
 from models.hierachy_actor_network import HierachyActorNetwork
+
 
 class OptionHierachy():
     def __init__(
@@ -12,7 +15,9 @@ class OptionHierachy():
         action_spec,
         time_step_spec,
         n_iterations,
-        learning_rate=1e-3
+        replay_buffer_max_length,
+        learning_rate=1e-3,
+        checkpoint_dir=None
     ):
         self.batch_size = batch_size
         observation_spec = time_step_spec.observation
@@ -29,6 +34,7 @@ class OptionHierachy():
         )
 
         optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
+        self.global_step = tf.compat.v1.train.get_or_create_global_step()
 
         self.agent = ppo_agent.PPOAgent(
             time_step_spec,
@@ -37,18 +43,36 @@ class OptionHierachy():
             value_net=value_net,
             optimizer=optimizer,
             normalize_rewards=True,
-            train_step_counter=tf.Variable(0)
+            train_step_counter=self.global_step
         )
-        
-    def get_counter(self):
-        return self.agent.train_step_counter.numpy()
+        self.agent.initialize()
+        self.agent.train = common.function(self.agent.train)
 
-    def get_replay_buffer(self, replay_buffer_max_length):
-        return tf_uniform_replay_buffer.TFUniformReplayBuffer(
+        self.replay_buffer = tf_uniform_replay_buffer.TFUniformReplayBuffer(
             data_spec=self.agent.collect_data_spec,
             batch_size=self.batch_size,
             max_length=replay_buffer_max_length
         )
+
+        self.train_checkpointer = None
+        if (checkpoint_dir):
+            self.train_checkpointer = common.Checkpointer(
+                ckpt_dir=checkpoint_dir,
+                max_to_keep=1,
+                agent=self.agent,
+                policy=self.agent.policy,
+                replay_buffer=self.replay_buffer,
+                global_step=self.global_step
+            )
+            self.train_checkpointer.initialize_or_restore()
+
+        self.policy_saver = policy_saver.PolicySaver(self.agent.policy)
+
+    def get_counter(self):
+        return self.agent.train_step_counter.numpy()
+
+    def get_replay_buffer(self):
+        return self.replay_buffer
 
     def action(self, time_step, collect=False):
         if collect:
@@ -58,3 +82,12 @@ class OptionHierachy():
     def train(self, experience):
         return self.agent.train(experience).loss
 
+    def save_checkpoint(self):
+        if (self.train_checkpointer == None):
+            raise ValueError(
+                'Cannot use checkpoint if checkpoint dir is not defined')
+
+        self.train_checkpointer.save(self.global_step)
+
+    def save_policy(self, save_dir):
+        self.policy_saver.save(save_dir)
