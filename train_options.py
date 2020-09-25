@@ -60,7 +60,7 @@ def get_prepare(spec):
             spec.discount.shape
         )
         observation = tf.reshape(
-            observation,
+            time_step.observation,
             spec.observation.shape
         )
         return TimeStep(
