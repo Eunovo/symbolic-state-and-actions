@@ -85,7 +85,7 @@ if __name__ == "__main__":
 
     state_autoencoder = StateAutoEncoder(
         n_epochs, steps_per_epoch,
-        20, normalize=True,
+        12, normalize=True,
         normalizer=normalizer
     )
 

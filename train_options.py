@@ -17,6 +17,7 @@ from tf_agents.utils import common
 from models import OptionHierachy
 from models import StateAutoEncoder
 from environments import StateEncoder
+from utils import Normalizer
 
 env_name = "Taxi-v3"  # @param {type:"string"}
 num_iterations = 20000  # @param {type:"integer"}
@@ -36,18 +37,33 @@ dir_path = os.path.dirname(os.path.realpath(__file__))
 checkpoint_dir = dir_path+"/checkpoints/option_hierachy/"
 policy_save_dir = dir_path+"/saved/option_hierachy/"
 
-train_py_env = suite_gym.load(env_name)
-eval_py_env = suite_gym.load(env_name)
+normalizer = Normalizer(0, 499)
+sae = StateAutoEncoder(
+    1, 1,
+    12, normalize=True,
+    normalizer=normalizer
+)
+sae.use_checkpoints(dir_path + '/checkpoints/sae/')
+
+
+train_py_env = StateEncoder(suite_gym.load(env_name), sae)
+eval_py_env = StateEncoder(suite_gym.load(env_name), sae)
+
+# train_py_env = suite_gym.load(env_name)
+# eval_py_env = suite_gym.load(env_name)
+
 
 train_env = tf_py_environment.TFPyEnvironment(train_py_env)
 eval_env = tf_py_environment.TFPyEnvironment(eval_py_env)
 
-time_step_spec = TimeStep(
-    step_type=TensorSpec(shape=(), dtype=tf.int32),
-    reward=TensorSpec(shape=()),
-    discount=TensorSpec(shape=()),
-    observation=TensorSpec(shape=(1,), dtype=tf.float32)
-)
+time_step_spec = train_env.time_step_spec()
+
+# time_step_spec = TimeStep(
+#     step_type=TensorSpec(shape=(), dtype=tf.int32),
+#     reward=TensorSpec(shape=()),
+#     discount=TensorSpec(shape=()),
+#     observation=TensorSpec(shape=(1,), dtype=tf.float32)
+# )
 
 
 def get_prepare(spec):
@@ -98,16 +114,20 @@ def compute_avg_reward(environment, policy, num_episodes=10, prepare=None):
 
 
 def collect_step(environment, policy, buffer, prepare=None):
-    time_step = environment.current_time_step()
-    action_step = policy.action(time_step, collect=True)
-    next_time_step = environment.step(action_step.action)
-
     use_prepare_if_set = lambda x: prepare(x) if (prepare) else x
 
+    time_step = environment.current_time_step()
+    time_step = use_prepare_if_set(time_step)
+
+    action_step = policy.action(time_step, collect=True)
+
+    next_time_step = environment.step(action_step.action)
+    next_time_step = use_prepare_if_set(next_time_step)
+
     traj = trajectory.from_transition(
-        use_prepare_if_set(time_step),
+        time_step,
         action_step,
-        use_prepare_if_set(next_time_step)
+        next_time_step
     )
 
     # Add trajectory to the replay buffer
