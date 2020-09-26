@@ -30,27 +30,15 @@ class StateEncoder(py_environment.PyEnvironment):
         state = tf.reshape(time_step.observation, (1,))
         observation = self.state_encoder.encode(state)
 
-        step_type = tf.reshape(
-            time_step.step_type,
-            spec.step_type.shape
-        )
-        reward = tf.reshape(
-            time_step.reward,
-            spec.reward.shape
-        )
-        discount = tf.reshape(
-            time_step.discount,
-            spec.discount.shape
-        )
         observation = tf.reshape(
             observation,
             spec.observation.shape
         )
 
         return ts.TimeStep(
-            step_type=step_type,
-            reward=reward,
-            discount=discount,
+            step_type=time_step.step_type,
+            reward=time_step.reward,
+            discount=time_step.discount,
             observation=observation
         )
 
