@@ -43,6 +43,7 @@ class OptionHierachy():
             value_net=value_net,
             optimizer=optimizer,
             normalize_rewards=True,
+            normalize_observations=False,
             train_step_counter=self.global_step
         )
         self.agent.initialize()
