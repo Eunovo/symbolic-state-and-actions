@@ -106,25 +106,26 @@ def compute_avg_reward(environment, policy, num_episodes=10, prepare=None):
 def collect_step(environment, policy, buffer, prepare=None):
     def use_prepare_if_set(x): return prepare(x) if (prepare) else x
 
-    time_step = environment.current_time_step()
-    time_step = use_prepare_if_set(time_step)
+    batch = []
+    for _ in range(batch_size):
+        time_step = environment.current_time_step()
+        time_step = use_prepare_if_set(time_step)
 
-    action_step = policy.action(time_step)
+        action_step = policy.action(time_step)
 
-    next_time_step = environment.step(action_step.action)
-    next_time_step = use_prepare_if_set(next_time_step)
+        next_time_step = environment.step(action_step.action)
+        next_time_step = use_prepare_if_set(next_time_step)
 
-    traj = trajectory.from_transition(
-        time_step,
-        action_step,
-        next_time_step
-    )
+        traj = trajectory.from_transition(
+            time_step,
+            action_step,
+            next_time_step
+        )
+        batch.append(traj)
 
     # Add trajectory to the replay buffer
     values_batched = tf.nest.map_structure(
-        lambda t: tf.stack([t] * batch_size),
-        traj
-    )
+        lambda t: tf.stack(batch), traj)
     buffer.add_batch(values_batched)
 
 
