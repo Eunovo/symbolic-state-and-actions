@@ -109,7 +109,7 @@ def collect_step(environment, policy, buffer, prepare=None):
     time_step = environment.current_time_step()
     time_step = use_prepare_if_set(time_step)
 
-    action_step = policy.action(time_step, collect=True)
+    action_step = policy.action(time_step)
 
     next_time_step = environment.step(action_step.action)
     next_time_step = use_prepare_if_set(next_time_step)
@@ -160,22 +160,21 @@ if __name__ == "__main__":
 
     # Evaluate the agent's policy once before training.
     avg_reward = compute_avg_reward(
-        eval_env, options_agent,
+        eval_env, options_agent.policy,
         num_eval_episodes, prepare=prepare
     )
     avg_reward_history = [avg_reward]
 
     collect_data(
-        train_env, options_agent,
+        train_env, options_agent.collect_policy,
         replay_buffer, initial_collect_steps,
         prepare=prepare
     )
 
     for _ in range(num_iterations):
-
         # Collect a few steps using collect_policy and save to the replay buffer.
         collect_data(
-            train_env, options_agent,
+            train_env, options_agent.collect_policy,
             replay_buffer, collect_steps_per_iteration,
             prepare=prepare
         )

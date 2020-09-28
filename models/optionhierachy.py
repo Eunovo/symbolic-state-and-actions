@@ -72,6 +72,14 @@ class OptionHierachy():
 
         self.policy_saver = policy_saver.PolicySaver(self.agent.policy)
 
+    @property
+    def collect_policy(self):
+        return self.agent.collect_policy
+
+    @property
+    def policy(self):
+        return self.agent.policy
+
     def get_counter(self):
         return self.agent.train_step_counter.numpy()
 
@@ -89,11 +97,6 @@ class OptionHierachy():
             )
             for option_net in self.actor_net.get_options()
         ]
-
-    def action(self, time_step, collect=False):
-        if collect:
-            return self.agent.collect_policy.action(time_step)
-        return self.agent.policy.action(time_step)
 
     def train(self, experience):
         return self.agent.train(experience).loss
