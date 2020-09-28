@@ -7,7 +7,7 @@ from tf_agents.utils import common as common_utils
 from tf_agents.utils import nest_utils
 
 from layers import GumbelSoftmaxLayer
-from option_actor_network import OptionActorNetwork
+from models import OptionActorNetwork
 
 
 class HierachyActorNetwork(network.DistributionNetwork):
