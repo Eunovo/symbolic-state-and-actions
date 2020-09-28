@@ -4,6 +4,7 @@ from tf_agents.replay_buffers import tf_uniform_replay_buffer
 from tf_agents.networks import value_network
 from tf_agents.agents.ppo import ppo_agent
 from tf_agents.policies import policy_saver
+from tf_agents.policies import greedy_policy, actor_policy
 from tf_agents.utils import common
 
 from models.hierachy_actor_network import HierachyActorNetwork
@@ -20,9 +21,11 @@ class OptionHierachy():
         checkpoint_dir=None
     ):
         self.batch_size = batch_size
-        observation_spec = time_step_spec.observation
+        self.time_step_spec = time_step_spec
+        self.action_spec = action_spec
+        observation_spec = self.time_step_spec.observation
 
-        actor_net = HierachyActorNetwork(
+        self.actor_net = HierachyActorNetwork(
             observation_spec,
             action_spec,
             n_iterations,
@@ -38,8 +41,8 @@ class OptionHierachy():
 
         self.agent = ppo_agent.PPOAgent(
             time_step_spec,
-            action_spec,
-            actor_net=actor_net,
+            self.action_spec,
+            actor_net=self.actor_net,
             value_net=value_net,
             optimizer=optimizer,
             normalize_rewards=True,
@@ -74,6 +77,18 @@ class OptionHierachy():
 
     def get_replay_buffer(self):
         return self.replay_buffer
+
+    def get_option_policies(self):
+        return [
+            greedy_policy.GreedyPolicy(
+                actor_policy.ActorPolicy(
+                    time_step_spec=self.time_step_spec,
+                    action_spec=self.action_spec,
+                    actor_network=option_net
+                )
+            )
+            for option_net in self.actor_net.get_options()
+        ]
 
     def action(self, time_step, collect=False):
         if collect:
