@@ -156,7 +156,7 @@ if __name__ == "__main__":
     )
     iterator = iter(dataset)
 
-    prepare = get_prepare(time_step_spec)
+    prepare = get_prepare(train_env.time_step_spec())
 
     # Evaluate the agent's policy once before training.
     avg_reward = compute_avg_reward(
