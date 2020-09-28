@@ -37,33 +37,23 @@ dir_path = os.path.dirname(os.path.realpath(__file__))
 checkpoint_dir = dir_path+"/checkpoints/option_hierachy/"
 policy_save_dir = dir_path+"/saved/option_hierachy/"
 
-normalizer = Normalizer(0, 499)
-sae = StateAutoEncoder(
-    1, 1,
-    12, normalize=True,
-    normalizer=normalizer
-)
-sae.use_checkpoints(dir_path + '/checkpoints/sae/')
 
+def load_env(env_name, encoder_path):
+    normalizer = Normalizer(0, 499)
+    sae = StateAutoEncoder(
+        1, 1,
+        12, normalize=True,
+        normalizer=normalizer
+    )
+    sae.use_checkpoints(encoder_path)
 
-train_py_env = StateEncoder(suite_gym.load(env_name), sae)
-eval_py_env = StateEncoder(suite_gym.load(env_name), sae)
+    train_py_env = StateEncoder(suite_gym.load(env_name), sae)
+    eval_py_env = StateEncoder(suite_gym.load(env_name), sae)
 
-# train_py_env = suite_gym.load(env_name)
-# eval_py_env = suite_gym.load(env_name)
+    train_env = tf_py_environment.TFPyEnvironment(train_py_env)
+    eval_env = tf_py_environment.TFPyEnvironment(eval_py_env)
 
-
-train_env = tf_py_environment.TFPyEnvironment(train_py_env)
-eval_env = tf_py_environment.TFPyEnvironment(eval_py_env)
-
-time_step_spec = train_env.time_step_spec()
-
-# time_step_spec = TimeStep(
-#     step_type=TensorSpec(shape=(), dtype=tf.int32),
-#     reward=TensorSpec(shape=()),
-#     discount=TensorSpec(shape=()),
-#     observation=TensorSpec(shape=(1,), dtype=tf.float32)
-# )
+    return (train_env, eval_env)
 
 
 def get_prepare(spec):
@@ -95,7 +85,7 @@ def get_prepare(spec):
 
 
 def compute_avg_reward(environment, policy, num_episodes=10, prepare=None):
-    use_prepare_if_set = lambda x: prepare(x) if (prepare) else x
+    def use_prepare_if_set(x): return prepare(x) if (prepare) else x
     total_reward = 0.0
     for _ in range(num_episodes):
 
@@ -114,7 +104,7 @@ def compute_avg_reward(environment, policy, num_episodes=10, prepare=None):
 
 
 def collect_step(environment, policy, buffer, prepare=None):
-    use_prepare_if_set = lambda x: prepare(x) if (prepare) else x
+    def use_prepare_if_set(x): return prepare(x) if (prepare) else x
 
     time_step = environment.current_time_step()
     time_step = use_prepare_if_set(time_step)
@@ -144,10 +134,13 @@ def collect_data(env, policy, buffer, steps, prepare=None):
 
 
 if __name__ == "__main__":
+    train_env, eval_env = load_env(
+        env_name, dir_path + '/checkpoints/sae/')
+
     options_agent = OptionHierachy(
         batch_size,
         train_env.action_spec(),
-        time_step_spec,
+        train_env.time_step_spec(),
         num_iterations,
         replay_buffer_max_length,
         learning_rate=learning_rate,
