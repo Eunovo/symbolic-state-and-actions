@@ -57,28 +57,25 @@ def load_env(env_name, encoder_path):
 
 
 def get_prepare(spec):
+    def fix_tensor(tensor, spec):
+        tensor = tf.reshape(tensor, spec.shape)
+        return tf.cast(tensor, spec.dtype)
+
     def prepare(time_step):
-        step_type = tf.reshape(
-            time_step.step_type,
-            spec.step_type.shape
-        )
-        reward = tf.reshape(
-            time_step.reward,
-            spec.reward.shape
-        )
-        discount = tf.reshape(
-            time_step.discount,
-            spec.discount.shape
-        )
-        observation = tf.reshape(
-            time_step.observation,
-            spec.observation.shape
-        )
+        step_type = fix_tensor(
+            time_step.step_type, spec.step_type)
+        reward = fix_tensor(
+            time_step.reward, spec.reward)
+        discount = fix_tensor(
+            time_step.discount, spec.discount)
+        observation = fix_tensor(
+            time_step.observation, spec.observation)
+
         return TimeStep(
             step_type=step_type,
             reward=reward,
             discount=discount,
-            observation=tf.cast(observation, spec.observation.dtype)
+            observation=observation
         )
 
     return prepare
