@@ -1,14 +1,13 @@
 import tensorflow as tf
 
-from tf_agents.networks import network, actor_distribution_network
+from tf_agents.networks import network
 from tf_agents.networks import categorical_projection_network
 from tf_agents.networks import encoding_network, utils
 from tf_agents.utils import common as common_utils
 from tf_agents.utils import nest_utils
 
 from layers import GumbelSoftmaxLayer
-
-# TODO consider subclassing ActorDistributionNetwork
+from option_actor_network import OptionActorNetwork
 
 
 class HierachyActorNetwork(network.DistributionNetwork):
@@ -129,3 +128,15 @@ class HierachyActorNetwork(network.DistributionNetwork):
             call_projection_net, self.projection_nets)
 
         return output_actions, network_state
+
+    def get_options(self):
+        return [
+            OptionActorNetwork(
+                self.input_tensor_spec,
+                self._output_spec,
+                self.action_spec,
+                self.encoder,
+                option_model,
+                self.projection_nets
+            ) for option_model in self.options
+        ]
