@@ -21,7 +21,7 @@ from utils import Normalizer
 
 env_name = "Taxi-v3"  # @param {type:"string"}
 num_iterations = 20000  # @param {type:"integer"}
-initial_collect_steps = 1000  # @param {type:"integer"}
+initial_collect_steps = 100  # @param {type:"integer"}
 collect_steps_per_iteration = 1  # @param {type:"integer"}
 
 batch_size = 64  # @param {type:"integer"}
@@ -102,27 +102,35 @@ def compute_avg_reward(environment, policy, num_episodes=10, prepare=None):
 
 def collect_step(environment, policy, buffer, prepare=None):
     def use_prepare_if_set(x): return prepare(x) if (prepare) else x
-
+    batch_size = buffer._batch_size
     batch = []
-    for _ in range(batch_size):
-        time_step = environment.current_time_step()
-        time_step = use_prepare_if_set(time_step)
+    while(len(batch) < batch_size):
+        environment.reset()
 
-        action_step = policy.action(time_step)
+        while True:
+            time_step = environment.current_time_step()
+            time_step = use_prepare_if_set(time_step)
 
-        next_time_step = environment.step(action_step.action)
-        next_time_step = use_prepare_if_set(next_time_step)
+            if (time_step.is_last() or (len(batch) >= batch_size)):
+                break
 
-        traj = trajectory.from_transition(
-            time_step,
-            action_step,
-            next_time_step
-        )
-        batch.append(traj)
+            action_step = policy.action(time_step)
 
-    # Add trajectory to the replay buffer
+            next_time_step = environment.step(action_step.action)
+            next_time_step = use_prepare_if_set(next_time_step)
+
+            traj = trajectory.from_transition(
+                time_step,
+                action_step,
+                next_time_step
+            )
+            batch.append(tf.nest.flatten(traj))
+
     values_batched = tf.nest.map_structure(
-        lambda t: tf.stack(batch), traj)
+        lambda i: tf.stack([t[i] for t in batch]),
+        tuple(range(len(traj)))
+    )
+    values_batched = tf.nest.pack_sequence_as(traj, values_batched)
     buffer.add_batch(values_batched)
 
 
@@ -189,7 +197,7 @@ if __name__ == "__main__":
 
         if step % eval_interval == 0:
             avg_reward = compute_avg_reward(
-                eval_env, options_agent,
+                eval_env, options_agent.policy,
                 num_eval_episodes, prepare=prepare
             )
             print('step = {0}: Average Reward = {1}'.format(step, avg_reward))
