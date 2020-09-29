@@ -100,43 +100,52 @@ def compute_avg_reward(environment, policy, num_episodes=10, prepare=None):
     return avg_reward.numpy()[0]
 
 
-def collect_step(environment, policy, buffer, prepare=None):
-    def use_prepare_if_set(x): return prepare(x) if (prepare) else x
-    batch_size = buffer._batch_size
-    batch = []
-    while(len(batch) < batch_size):
-        environment.reset()
+class DataCollector:
+    def __init__(self, env, batch_size, buffer, prepare=None):
+        self.env = env
+        self.batch_size = batch_size
+        self.buffer = buffer
+        self.prepare = prepare
 
-        while True:
-            time_step = environment.current_time_step()
-            time_step = use_prepare_if_set(time_step)
+    def preprocess(self, time_step):
+        if (self.prepare):
+            return prepare(time_step)
+        return time_step
 
-            if (time_step.is_last() or (len(batch) >= batch_size)):
-                break
+    def collect_data(self, policy, n_steps):
+        for _ in range(n_steps):
+            self.collect_step(policy)
 
-            action_step = policy.action(time_step)
+    def collect_step(self, policy):
+        batch = []
+        while(len(batch) < self.batch_size):
+            self.env.reset()
 
-            next_time_step = environment.step(action_step.action)
-            next_time_step = use_prepare_if_set(next_time_step)
+            while True:
+                time_step = self.env.current_time_step()
+                time_step = self.preprocess(time_step)
 
-            traj = trajectory.from_transition(
-                time_step,
-                action_step,
-                next_time_step
-            )
-            batch.append(tf.nest.flatten(traj))
+                if (time_step.is_last() or (len(batch) >= self.batch_size)):
+                    break
 
-    values_batched = tf.nest.map_structure(
-        lambda i: tf.stack([t[i] for t in batch]),
-        tuple(range(len(traj)))
-    )
-    values_batched = tf.nest.pack_sequence_as(traj, values_batched)
-    buffer.add_batch(values_batched)
+                action_step = policy.action(time_step)
 
+                next_time_step = self.env.step(action_step.action)
+                next_time_step = self.preprocess(next_time_step)
 
-def collect_data(env, policy, buffer, steps, prepare=None):
-    for _ in range(steps):
-        collect_step(env, policy, buffer, prepare)
+                traj = trajectory.from_transition(
+                    time_step,
+                    action_step,
+                    next_time_step
+                )
+                batch.append(tf.nest.flatten(traj))
+
+        values_batched = tf.nest.map_structure(
+            lambda i: tf.stack([t[i] for t in batch]),
+            tuple(range(len(traj)))
+        )
+        values_batched = tf.nest.pack_sequence_as(traj, values_batched)
+        self.buffer.add_batch(values_batched)
 
 
 if __name__ == "__main__":
@@ -154,7 +163,6 @@ if __name__ == "__main__":
     )
 
     replay_buffer = options_agent.get_replay_buffer()
-
     dataset = replay_buffer.as_dataset(
         num_parallel_calls=3,
         sample_batch_size=batch_size,
@@ -163,6 +171,8 @@ if __name__ == "__main__":
     iterator = iter(dataset)
 
     prepare = get_prepare(train_env.time_step_spec())
+    data_collector = DataCollector(
+        train_env, batch_size, replay_buffer, prepare=prepare)
 
     # Evaluate the agent's policy once before training.
     avg_reward = compute_avg_reward(
@@ -171,19 +181,13 @@ if __name__ == "__main__":
     )
     avg_reward_history = [avg_reward]
 
-    collect_data(
-        train_env, options_agent.collect_policy,
-        replay_buffer, initial_collect_steps,
-        prepare=prepare
-    )
+    data_collector.collect_data(
+        options_agent.collect_policy, initial_collect_steps)
 
     for _ in range(num_iterations):
-        # Collect a few steps using collect_policy and save to the replay buffer.
-        collect_data(
-            train_env, options_agent.collect_policy,
-            replay_buffer, collect_steps_per_iteration,
-            prepare=prepare
-        )
+        # Collect a few steps every iteration
+        data_collector.collect_data(
+            options_agent.collect_policy, collect_steps_per_iteration)
 
         # Sample a batch of data from the buffer and update the agent's network.
         experience, unused_info = next(iterator)
