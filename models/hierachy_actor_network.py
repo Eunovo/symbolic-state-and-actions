@@ -68,10 +68,13 @@ class HierachyActorNetwork(network.DistributionNetwork):
             kernel_initializer=kernel_initializer,
             batch_squash=False
         )
-        self.hidden_selector_layer = tf.keras.layers.Dense(
-            self.n_options, activation='relu')
-        self.selector = GumbelSoftmaxLayer(
-            self.n_options, 1, 5.0, 0.7, n_iterations)
+        gumbel_layer = GumbelSoftmaxLayer(
+            1, self.n_options, 5.0, 0.7, n_iterations)
+        self.selector = tf.keras.models.Sequential([
+            tf.keras.layers.Dense(self.n_options, activation='relu'),
+            gumbel_layer,
+            tf.keras.layers.Reshape((self.n_options, 1))
+        ])
         # Remember to update its temperature using it's callback
 
     @property
@@ -100,10 +103,9 @@ class HierachyActorNetwork(network.DistributionNetwork):
             step_type=step_type,
             network_state=network_state
         )
-        l_hidden = self.hidden_selector_layer(state)
+        l_hidden = self.selector(state)
         selection_vector = tf.transpose(
-            self.selector(l_hidden), perm=[0, 2, 1]
-        )
+            l_hidden, perm=[0, 2, 1])
 
         options = [
             option(
