@@ -83,7 +83,7 @@ if __name__ == "__main__":
     data_collector.collect_data(
         options_agent.collect_policy, initial_collect_steps)
 
-    step = 0
+    step = options_agent.get_counter()
     while (step < num_iterations):
         # Collect a few steps every iteration
         data_collector.collect_data(
