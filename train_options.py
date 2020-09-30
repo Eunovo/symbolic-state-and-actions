@@ -83,12 +83,12 @@ if __name__ == "__main__":
     data_collector.collect_data(
         options_agent.collect_policy, initial_collect_steps)
 
-    for _ in range(num_iterations):
+    step = 0
+    while (step < num_iterations):
         # Collect a few steps every iteration
         data_collector.collect_data(
             options_agent.collect_policy, collect_steps_per_iteration)
 
-        # Sample a batch of data from the buffer and update the agent's network.
         experience, unused_info = next(iterator)
         train_loss = options_agent.train(experience)
 
