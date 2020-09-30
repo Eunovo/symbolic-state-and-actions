@@ -21,7 +21,6 @@ class OptionActorNetwork(network.DistributionNetwork):
             output_spec=output_spec,
             state_spec=(), name=name
         )
-        self.input_tensor_spec = input_tensor_spec
         self.encoder = encoder
         self.option_model = option_model
         self._output_spec = output_spec
