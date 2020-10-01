@@ -98,7 +98,15 @@ class OptionHierachy():
             for option_net in self.actor_net.get_options()
         ]
 
+    def reinitialize_selector(self):
+        self.actor_net.reinitialize_selector()
+
+    def train_selector(self, experience):
+        self.actor_net.freeze_options()
+        return self.agent.train(experience).loss
+
     def train(self, experience):
+        self.actor_net.unfreeze_options()
         return self.agent.train(experience).loss
 
     def save_checkpoint(self):

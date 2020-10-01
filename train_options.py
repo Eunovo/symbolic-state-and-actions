@@ -21,6 +21,8 @@ log_interval = 200
 
 num_eval_episodes = 5
 eval_interval = 1000
+warm_up_period = 100
+joint_update_period = 100
 
 replay_buffer_max_length = 100000
 
@@ -89,8 +91,15 @@ if __name__ == "__main__":
         data_collector.collect_data(
             options_agent.collect_policy, collect_steps_per_iteration)
 
-        experience, unused_info = next(iterator)
-        train_loss = options_agent.train(experience)
+        options_agent.reinitialize_selector()
+
+        for _ in range(warm_up_period):
+            experience, unused_info = next(iterator)
+            train_loss = options_agent.train_selector(experience)
+
+        for _ in range(joint_update_period):
+            experience, unused_info = next(iterator)
+            train_loss = options_agent.train(experience)
 
         step = options_agent.get_counter()
 

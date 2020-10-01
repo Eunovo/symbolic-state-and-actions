@@ -131,6 +131,19 @@ class HierachyActorNetwork(network.DistributionNetwork):
 
         return output_actions, network_state
 
+    def freeze_options(self):
+        for options in self.options:
+            options.trainable = False
+
+    def unfreeze_options(self):
+        for options in self.options:
+            options.trainable = True
+
+    def reinitialize_selector(self):
+        for l in self.selector.layers:
+            if (hasattr(l, 'kernel_initializer')):
+                l.kernel.initializer.run()
+
     def get_options(self):
         return [
             OptionActorNetwork(
