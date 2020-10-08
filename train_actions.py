@@ -50,7 +50,7 @@ def create_dataset_from_generator(generator):
     return dataset
 
 
-def setup_env(env_name):
+def setup_env(env_name, num_collect_episodes):
     env = gym.make(env_name)
     num_actions = env.action_space.n
     actions = np.array(range(num_actions))
@@ -63,7 +63,7 @@ def setup_env(env_name):
     train_ds = dataset.shuffle(buffer_size=1024).repeat().batch(
         batch_size, drop_remainder=True)
 
-    return num_actions, num_state_bits, train_ds
+    return num_actions, train_ds
 
 
 def setup_model(num_actions, num_state_bits, sae, checkpoint_dir):
@@ -100,7 +100,7 @@ if __name__ == "__main__":
     )
     sae.use_checkpoints(sae_path)
 
-    num_actions, num_state_bits, train_ds = setup_env(env_name)
+    num_actions, train_ds = setup_env(env_name, num_collect_episodes)
 
     low_level_action_model, callbacks = setup_model(
         num_actions,
