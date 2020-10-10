@@ -1,5 +1,4 @@
 import tensorflow as tf
-import numpy as np
 import gym
 import os
 
@@ -18,11 +17,6 @@ num_state_bits = 12
 env_name = "Taxi-v3"
 batch_size = 64
 num_collect_episodes = 100
-
-
-def get_one_hot(targets, nb_classes):
-    res = np.eye(nb_classes)[np.array(targets).reshape(-1)]
-    return res.reshape(list(targets.shape)+[nb_classes])
 
 
 def create_data_generator(env, num_collect_episodes, encoder, get_action_code):
@@ -53,8 +47,9 @@ def create_dataset_from_generator(generator):
 def setup_env(env_name, num_collect_episodes):
     env = gym.make(env_name)
     num_actions = env.action_space.n
-    actions = np.array(range(num_actions))
-    one_hot = get_one_hot(actions, num_actions)
+    actions = range(num_actions)
+    one_hot = tf.one_hot(
+        actions, num_actions, on_value=1.0, off_value=0.0)
     dataset = create_dataset_from_generator(
         lambda: create_data_generator(
             env, num_collect_episodes, sae, lambda x: one_hot[x])
