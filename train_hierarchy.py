@@ -7,19 +7,19 @@ from tf_agents.networks import value_network, actor_distribution_network
 from tf_agents.agents.ppo import ppo_agent
 from tf_agents.policies import policy_saver
 from tf_agents.utils import common
-from tf_agents.drivers import dynamic_episode_driver
+from tf_agents.drivers import dynamic_episode_driver, dynamic_step_driver
 from tf_agents.metrics import tf_metrics
 from tf_agents.environments import suite_gym
 from tf_agents.environments import tf_py_environment
 from tf_agents.specs import array_spec
-from tf_agents.trajectories import time_step as ts
+from tf_agents.trajectories import time_step as ts, trajectory
 
 from environments import StateEncoder
 from environments import LowLevelEnv, MasterEnv, OptionsEnv
 from models import StateAutoEncoder
 from models.hierarchy import OptionsNetwork
 from train_actions import setup_model
-from utils import Normalizer
+from utils import Normalizer, get_prepare
 
 
 num_state_bits = 12
@@ -42,8 +42,8 @@ checkpoint_dir = dir_path+'/checkpoints/hierarchy-v2/'
 encoder_path = dir_path+'/checkpoints/sae/'
 low_level_model_path = dir_path+'/checkpoints/low_level_actions/'
 
-master_collect_episodes = 1
-options_collect_episodes = 1
+master_collect_steps = 2
+options_collect_steps = 2
 
 
 def load_env(env_name, sae):
@@ -82,15 +82,25 @@ def create_train_checkpointer(
     return train_checkpointer
 
 
-def populate_buffer(env, replay_buffer, policy, num_episodes, batch_size):
-    def add_to_replay_buffer(traj):
+def populate_buffer(env, replay_buffer, policy, spec, num_steps, batch_size):
+    prepare = get_prepare(spec)
+
+    def add_to_replay_buffer(transition):
+        time_step, _, next_time_step = transition
+        time_step = prepare(time_step)
+        next_time_step = prepare(next_time_step)
+        action_step = policy.action(time_step)
+
+        traj = trajectory.from_transition(
+            time_step, action_step, next_time_step)
+
         traj_batched = tf.nest.map_structure(
             lambda t: tf.stack([t] * batch_size), traj)
         replay_buffer.add_batch(traj_batched)
 
     observers = [add_to_replay_buffer]
-    driver = dynamic_episode_driver.DynamicEpisodeDriver(
-        env, policy, observers, num_episodes=num_episodes)
+    driver = dynamic_step_driver.DynamicStepDriver(
+        env, policy, transition_observers=observers, num_steps=num_steps)
 
     # Initial driver.run will reset the environment and initialize the policy.
     driver.run()
@@ -218,27 +228,32 @@ def check_interval(interval):
 
 
 while (global_step < num_iterations):
+    populate_buffer(
+        master_train_env, master_rb,
+        master_agent.collect_policy,
+        master_agent.time_step_spec,
+        master_collect_steps,
+        batch_size
+    )
     for _ in range(warmup_period):
-        populate_buffer(
-            master_train_env, master_rb,
-            master_agent.collect_policy,
-            master_collect_episodes,
-            batch_size
-        )
         experience, unused_info = next(master_iter)
         master_loss = master_agent.train(experience)
+
+    print('Warm-up complete')
 
     for _ in range(joint_update_period):
         populate_buffer(
             master_train_env, master_rb,
             master_agent.collect_policy,
-            master_collect_episodes,
+            master_agent.time_step_spec,
+            2,
             batch_size
         )
         populate_buffer(
             option_train_env, options_rb,
             options_agent.collect_policy,
-            options_collect_episodes,
+            options_agent.time_step_spec,
+            2,
             batch_size
         )
         option_exp, unused_info = next(options_iter)
