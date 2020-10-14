@@ -17,9 +17,10 @@ class LowLevelEnv(py_environment.PyEnvironment):
         num_actions = self.env.action_spec().maximum - \
             self.env.action_spec().minimum + 1
         self.env_actions = range(num_actions)
-        self.one_hot = tf.one_hot(self.env_actions, num_actions)
+        self.one_hot = tf.one_hot(
+            self.env_actions, num_actions, on_value=1.0, off_value=0.0)
 
-        self.search_depth_limit = 200
+        self.search_depth_limit = 1
 
     def action_spec(self):
         return self._action_spec
@@ -45,7 +46,7 @@ class LowLevelEnv(py_environment.PyEnvironment):
                 observation=current_time_step.observation,
                 step_type=current_time_step.step_type,
                 discount=current_time_step.discount,
-                reward=-50
+                reward=tf.cast(-50, tf.float32)
             )
 
         # accumulate rewards accross several actions
@@ -54,19 +55,22 @@ class LowLevelEnv(py_environment.PyEnvironment):
         for action in plan:
             time_step = self.env.step(action)
             reward += time_step.reward
+            if (time_step.is_last()):
+                reward = -50
+                break
 
         return ts.TimeStep(
             observation=time_step.observation,
             step_type=time_step.step_type,
             discount=time_step.discount,
-            reward=reward
+            reward=tf.cast(reward, tf.float32)
         )
 
     def search(self, current_state, goal, depth=0):
         if (tf.math.reduce_all(tf.equal(goal, current_state))):
             return []
 
-        if (depth == self.search_depth_limit):
+        if (depth > self.search_depth_limit):
             return []
 
         best_plan = []
@@ -74,7 +78,8 @@ class LowLevelEnv(py_environment.PyEnvironment):
             plan = [action]
             one_hot_action = self.one_hot[action]
             action_state = tf.concat([one_hot_action, current_state], 0)
-            next_state = self.low_level_model.predict(action_state)
+            action_state = tf.reshape(action_state, (1, len(action_state)))
+            next_state = self.low_level_model.predict(action_state)[0]
             plan.extend(self.search(next_state, goal, depth + 1))
 
             if (len(plan) <= len(best_plan)):
@@ -139,7 +144,7 @@ class OptionsEnv(py_environment.PyEnvironment):
         return self.get_options_time_step(current_time_step)
 
     def get_options_time_step(self, current_time_step):
-        master_action = self.master_policy.action(current_time_step)
+        master_action = self.master_policy.action(current_time_step).action
         return ts.TimeStep(
             observation=tf.concat(
                 [master_action, current_time_step.observation], 0),
