@@ -8,6 +8,26 @@ from tf_agents.utils import common as common_utils
 from tf_agents.utils import nest_utils
 
 
+class GumbelLayer(gumbel_softmax.GumbelSoftmax):
+    def __init__(
+        self,
+        temperature=None,
+        logits=None,
+        dtype=None,
+        name='Gumbel_'
+    ):
+        super(GumbelLayer, self).__init__(
+            temperature, logits=logits,
+            dtype=dtype, name=name
+        )
+
+    @property
+    def parameters(self):
+        params = super().parameters
+        params['temperature'] = super().temperature
+        params['logits'] = super().logits
+        return params
+
 class OptionsNetwork(network.DistributionNetwork):
     def __init__(
         self,
@@ -56,7 +76,7 @@ class OptionsNetwork(network.DistributionNetwork):
         }
 
         return distribution_spec.DistributionSpec(
-            gumbel_softmax.GumbelSoftmax,
+            GumbelLayer,
             input_param_spec,
             sample_spec=sample_spec,
             dtype=sample_spec.dtype
@@ -78,4 +98,5 @@ class OptionsNetwork(network.DistributionNetwork):
         logits = self.projection_layer(state)
         logits = batch_squash.unflatten(logits)
 
-        return self.output_spec.build_distribution(temperature=0.7, logits=logits), ()
+        output = self.output_spec.build_distribution(temperature=0.7, logits=logits), network_state
+        return output
