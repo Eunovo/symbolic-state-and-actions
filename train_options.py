@@ -12,8 +12,8 @@ from utils import compute_avg_reward, get_prepare
 
 env_name = "Taxi-v3"
 num_iterations = 20000
-initial_collect_steps = 100
-collect_steps_per_iteration = 1
+initial_collect_steps = 10
+collect_steps_per_iteration = 2
 
 batch_size = 64
 learning_rate = 1e-3
@@ -91,7 +91,7 @@ if __name__ == "__main__":
         data_collector.collect_data(
             options_agent.collect_policy, collect_steps_per_iteration)
 
-        options_agent.reinitialize_selector()
+        # options_agent.reinitialize_selector()
 
         for _ in range(warm_up_period):
             experience, unused_info = next(iterator)

@@ -33,6 +33,7 @@ class LowLevelEnv(py_environment.PyEnvironment):
 
     def _step(self, goal):
         # action here is a goal state
+        goal = goal[:, 0]
         current_time_step = self.env.current_time_step()
         # we need to plan here
         plan = self.search(
@@ -120,11 +121,11 @@ class MasterEnv(py_environment.PyEnvironment):
 
 
 class OptionsEnv(py_environment.PyEnvironment):
-    def __init__(self, env, observation_spec):
+    def __init__(self, env, observation_spec, action_spec):
         self.env = env
         self.master_policy = None
         self._observation_spec = observation_spec
-        self._action_spec = self.env.time_step_spec().observation
+        self._action_spec = action_spec
 
     def set_master_policy(self, master_policy):
         self.master_policy = master_policy

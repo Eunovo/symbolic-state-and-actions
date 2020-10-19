@@ -39,7 +39,7 @@ class OptionsNetwork(network.DistributionNetwork):
         self.n_options = n_options
         self.action_spec = action_spec
 
-        output_shape = action_spec.shape  # .concatenate([2])
+        output_shape = action_spec.shape
         output_spec = self._output_distribution_spec(
             output_shape, action_spec, name
         )
@@ -60,8 +60,7 @@ class OptionsNetwork(network.DistributionNetwork):
             1000, activation='relu'
         )
         self.projection_layer = tf.keras.layers.Dense(
-            self._output_shape.num_elements()
-        )
+            self._output_shape.num_elements())
 
     def _output_distribution_spec(self, output_shape, sample_spec, network_name):
         input_param_spec = {
@@ -87,6 +86,7 @@ class OptionsNetwork(network.DistributionNetwork):
         step_type=(), network_state=(),
         training=False, mask=None
     ):
+        batched_shape = observations.shape
         outer_rank = nest_utils.get_outer_rank(
             observations, self.input_tensor_spec)
         batch_squash = utils.BatchSquash(outer_rank)
@@ -98,5 +98,13 @@ class OptionsNetwork(network.DistributionNetwork):
         logits = self.projection_layer(state)
         logits = batch_squash.unflatten(logits)
 
-        output = self.output_spec.build_distribution(temperature=0.7, logits=logits), network_state
+        n = self._output_shape.num_elements() / 2
+        n = tf.cast(n, tf.int32)
+        target_shape = list(batched_shape[:outer_rank])
+        target_shape.extend([n, 2])
+        target_shape = [1 if k == None else k for k in target_shape]
+        logits = tf.reshape(logits, target_shape)
+
+        output = self.output_spec.build_distribution(
+            temperature=0.7, logits=logits), network_state
         return output

@@ -5,10 +5,13 @@ import os
 from tf_agents.replay_buffers import tf_uniform_replay_buffer
 from tf_agents.networks import value_network, actor_distribution_network
 from tf_agents.agents.ppo import ppo_agent
+from tf_agents.agents.dqn import dqn_agent
+from tf_agents.networks import q_network
+from tf_agents.agents.ddpg import critic_network
+from tf_agents.agents.sac import sac_agent
 from tf_agents.policies import policy_saver
 from tf_agents.utils import common
-from tf_agents.drivers import dynamic_episode_driver, dynamic_step_driver
-from tf_agents.metrics import tf_metrics
+from tf_agents.drivers import dynamic_step_driver
 from tf_agents.environments import suite_gym
 from tf_agents.environments import tf_py_environment
 from tf_agents.specs import array_spec
@@ -35,6 +38,14 @@ num_iterations = 20000
 log_interval = 1000
 eval_interval = 1000
 checkpoint_interval = 1000
+
+critic_learning_rate = 3e-4  # @param {type:"number"}
+actor_learning_rate = 3e-4  # @param {type:"number"}
+alpha_learning_rate = 3e-4  # @param {type:"number"}
+target_update_tau = 0.005  # @param {type:"number"}
+target_update_period = 1  # @param {type:"number"}
+gamma = 0.99  # @param {type:"number"}
+reward_scale_factor = 1.0  # @param {type:"number"}
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 save_dir = dir_path+'/saved/hierarchy-v2/'
@@ -129,7 +140,6 @@ options_action_spec = array_spec.BoundedArraySpec(
     shape=(num_state_bits, 2), dtype=np.float32,
     minimum=0, maximum=1, name='option_action'
 )
-
 options_time_step_spec = ts.TimeStep(
     step_type=train_env.time_step_spec().step_type,
     reward=train_env.time_step_spec().reward,
@@ -154,6 +164,7 @@ master_train_env = tf_py_environment.TFPyEnvironment(master_env)
 optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
 global_step = tf.compat.v1.train.get_or_create_global_step()
 
+
 master_value_network = value_network.ValueNetwork(
     master_train_env.time_step_spec().observation,
     fc_layer_params=(100,)
@@ -177,23 +188,39 @@ master_agent.initialize()
 master_agent.train = common.function(master_agent.train)
 options_env.set_master_policy(master_agent.policy)
 
-options_actor_network = OptionsNetwork(
-    option_train_env.time_step_spec().observation,
+
+options_critic_net = critic_network.CriticNetwork(
+    (option_train_env.observation_spec(),
+     option_train_env.action_spec()),
+    observation_fc_layer_params=None,
+    action_fc_layer_params=None,
+    joint_fc_layer_params=(100, ),
+    kernel_initializer='glorot_uniform',
+    last_kernel_initializer='glorot_uniform'
+)
+
+options_actor_net = OptionsNetwork(
+    option_train_env.observation_spec(),
     option_train_env.action_spec(),
-    num_options
+    4
 )
 
-options_value_network = value_network.ValueNetwork(
-    option_train_env.time_step_spec().observation,
-    fc_layer_params=(100,)
-)
-
-options_agent = ppo_agent.PPOAgent(
+options_agent = sac_agent.SacAgent(
     option_train_env.time_step_spec(),
     option_train_env.action_spec(),
-    optimizer=optimizer,
-    actor_net=options_actor_network,
-    value_net=options_value_network,
+    actor_network=options_actor_net,
+    critic_network=options_critic_net,
+    actor_optimizer=tf.compat.v1.train.AdamOptimizer(
+        learning_rate=learning_rate),
+    critic_optimizer=tf.compat.v1.train.AdamOptimizer(
+        learning_rate=learning_rate),
+    alpha_optimizer=tf.compat.v1.train.AdamOptimizer(
+        learning_rate=learning_rate),
+    target_update_tau=target_update_tau,
+    target_update_period=target_update_period,
+    td_errors_loss_fn=tf.math.squared_difference,
+    gamma=gamma,
+    reward_scale_factor=reward_scale_factor,
     train_step_counter=tf.Variable(0)
 )
 options_agent.initialize()
@@ -264,10 +291,12 @@ while (global_step < num_iterations):
         master_exp, unused_info = next(master_iter)
         master_loss = master_agent.train(master_exp)
 
+    global_step.assign_add(1)
+
     if check_interval(log_interval):
         print(
             'step = {0}: master loss = {1}, options loss = {2}'.format(
-                global_step, master_loss, options_loss)
+                global_step.value, master_loss, options_loss)
         )
 
     if check_interval(checkpoint_interval):
