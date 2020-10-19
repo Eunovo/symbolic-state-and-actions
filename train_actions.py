@@ -44,7 +44,7 @@ def create_dataset_from_generator(generator):
     return dataset
 
 
-def setup_env(env_name, num_collect_episodes):
+def setup_env(env_name, num_collect_episodes, sae):
     env = gym.make(env_name)
     num_actions = env.action_space.n
     actions = range(num_actions)
@@ -95,7 +95,8 @@ if __name__ == "__main__":
     )
     sae.use_checkpoints(sae_path)
 
-    num_actions, train_ds = setup_env(env_name, num_collect_episodes)
+    num_actions, train_ds = setup_env(
+        env_name, num_collect_episodes, sae)
 
     low_level_action_model, callbacks = setup_model(
         num_actions,
